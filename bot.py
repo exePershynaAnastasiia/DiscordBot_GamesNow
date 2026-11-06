@@ -311,7 +311,7 @@ async def create_new_team(interaction: discord.Interaction):
 
 
 @bot.tree.command(
-    name="add_to_team",
+    name="join_team",
     description="Join an existing project team"
 )
 @app_commands.describe(number="The number of the team to join")
@@ -514,4 +514,4 @@ async def export_teams(interaction: discord.Interaction):
         )
 
 
-    bot.run(TOKEN)
+bot.run(TOKEN)
