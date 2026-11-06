@@ -17,7 +17,10 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 CATEGORY_ID = int(os.getenv("CATEGORY_ID", "0"))
 
-DATA_FILE = Path(__file__).with_name("teams.json")
+DATA_DIR = Path(os.getenv("DATA_DIR", Path(__file__).parent))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+DATA_FILE = DATA_DIR / "teams.json"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("team_bot")
@@ -62,7 +65,7 @@ def save_data(data):
     os.replace(temp_file, DATA_FILE)
 
 async def export_teams_csv(guild):
-    csv_file = Path(__file__).with_name("team_members.csv")
+    csv_file = DATA_DIR / "team_members.csv"
 
     guild_data = get_guild_data(guild.id)
 
@@ -483,5 +486,32 @@ if __name__ == "__main__":
 
     if not CATEGORY_ID:
         raise RuntimeError("CATEGORY_ID is missing from .env")
+
+
+    
+@bot.tree.command(
+    name="export_teams",
+    description="Download the list of teams and members"
+)
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@app_commands.checks.has_permissions(administrator=True)
+async def export_teams(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+
+    guild = interaction.guild
+
+    async with bot.team_lock:
+        await export_teams_csv(guild)
+
+        data_dir = Path(os.getenv("DATA_DIR", Path(__file__).parent))
+        csv_file = data_dir / "team_members.csv"
+
+        await interaction.followup.send(
+            content="Here is the current list of teams and members:",
+            file=discord.File(csv_file, filename="team_members.csv"),
+            ephemeral=True
+        )
+
 
     bot.run(TOKEN)
