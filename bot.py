@@ -22,7 +22,7 @@ DATA_FILE = DATA_DIR / "teams.json"
 CSV_FILE = DATA_DIR / "team_members.csv"
 FIRST_TEAM_NUMBER = 6
 MAX_CHANNELS_IN_CATEGORY = 50
-JAMMER_ROLE_NAME = "jammers2026"
+JAMMER_ROLE_NAME = "JammerGNGJ18 2026"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("team_bot")
