@@ -339,42 +339,80 @@ async def join_team(interaction: discord.Interaction, number: int):
             logger.exception("Could not welcome new team member")
 
 
-@bot.tree.command(name="remove_from_team", description="Leave a project team")
+
+@bot.tree.command(
+    name="remove_from_team",
+    description="Leave a project team"
+)
 @app_commands.describe(number="Team number")
 @app_commands.guild_only()
-async def remove_from_team(interaction: discord.Interaction, number: int):
+async def remove_from_team(
+    interaction: discord.Interaction,
+    number: int
+):
     await interaction.response.defer(ephemeral=True)
+
     guild = interaction.guild
     member = get_interaction_member(interaction)
+
     if guild is None or member is None:
-        await interaction.followup.send("Use this command in the server", ephemeral=True)
+        await interaction.followup.send(
+            "Use this command in the server",
+            ephemeral=True
+        )
         return
 
-    await assign_jammer_role(member)
-
     async with bot.team_lock:
-        team = get_team(guild.id, number)
-        if team is None:
-            await interaction.followup.send(f"Team {number} does not exist", ephemeral=True)
-            return
-        role = guild.get_role(int(team["role_id"]))
-        if role is None:
-            await interaction.followup.send("Team role is missing", ephemeral=True)
-            return
-        if member.id not in team_member_ids(team) and role not in member.roles:
-            await interaction.followup.send(f"You are not in team {number}", ephemeral=True)
-            return
-        try:
-            if role in member.roles:
-                await member.remove_roles(role, reason=f"Left team {number}")
-        except discord.HTTPException:
-            logger.exception("Failed to remove member from team %s", number)
-            await interaction.followup.send("Cannot remove team role", ephemeral=True)
-            return
-        team["members"] = [entry for entry in team["members"] if member_id_of(entry) != member.id]
-        await save_and_export(guild)
-        await interaction.followup.send(f"You have left team {number}", ephemeral=True)
+        role = discord.utils.get(
+            guild.roles,
+            name=f"Project{number}"
+        )
 
+        if role is None:
+            await interaction.followup.send(
+                f"Team {number} does not exist",
+                ephemeral=True
+            )
+            return
+
+        if role not in member.roles:
+            await interaction.followup.send(
+                f"You are not in team {number}",
+                ephemeral=True
+            )
+            return
+
+        try:
+            await member.remove_roles(
+                role,
+                reason=f"Left team {number}"
+            )
+        except discord.HTTPException:
+            logger.exception(
+                "Failed to remove member from team %s",
+                number
+            )
+            await interaction.followup.send(
+                "Cannot remove team role",
+                ephemeral=True
+            )
+            return
+
+        team = get_team(guild.id, number)
+
+        if team is not None:
+            team["members"] = [
+                entry
+                for entry in team["members"]
+                if member_id_of(entry) != member.id
+            ]
+
+            await save_and_export(guild)
+
+        await interaction.followup.send(
+            f"You have left team {number}",
+            ephemeral=True
+        )
 
 @bot.tree.command(name="export_teams", description="Download team membership CSV")
 @app_commands.guild_only()
