@@ -92,30 +92,69 @@ def get_base_category(guild):
 
 async def find_or_create_category(guild):
     base = get_base_category(guild)
+
     if base is None:
         raise ValueError("Base category not found; check CATEGORY_ID")
 
-    # Recognize only the configured category and its numbered continuations
-    candidates = [(1, base)]
-    pattern = re.compile(rf"{re.escape(base.name)} (\d+)")
-    for category in guild.categories:
-        if category.id == base.id:
-            continue
-        match = pattern.fullmatch(category.name)
-        if match and int(match.group(1)) >= 2:
-            candidates.append((int(match.group(1)), category))
+    # Remove the trailing number from the base category
+    match = re.fullmatch(r"(.+?)\s+(\d+)", base.name)
 
-    for _, category in sorted(candidates, key=lambda entry: entry[0]):
+    if match:
+        base_name = match.group(1)
+        base_number = int(match.group(2))
+    else:
+        base_name = base.name
+        base_number = 1
+
+    # Find all numbered team categories
+    candidates = []
+
+    pattern = re.compile(
+        rf"{re.escape(base_name)}\s+(\d+)$",
+        re.IGNORECASE
+    )
+
+    for category in guild.categories:
+        category_match = pattern.fullmatch(category.name)
+
+        if category_match:
+            category_number = int(category_match.group(1))
+
+            if category_number >= base_number:
+                candidates.append(
+                    (category_number, category)
+                )
+
+    if not any(cat.id == base.id for _, cat in candidates):
+        candidates.append((base_number, base))
+
+    # Use the newest category first
+    candidates.sort(
+        key=lambda item: item[0],
+        reverse=True
+    )
+
+    for _, category in candidates:
         if len(category.channels) < MAX_CHANNELS_IN_CATEGORY:
             return category
 
-    next_index = max(index for index, _ in candidates) + 1
+    # Create the next category when all existing ones are full
+    next_index = max(
+        number for number, _ in candidates
+    ) + 1
+
     category = await guild.create_category(
-        name=f"{base.name} {next_index}",
+        name=f"{base_name} {next_index}",
         overwrites=base.overwrites,
         reason="Project team category has reached its channel limit"
     )
-    logger.info("Created overflow category %s (%s)", category.name, category.id)
+
+    logger.info(
+        "Created overflow category %s (%s)",
+        category.name,
+        category.id
+    )
+
     return category
 
 
