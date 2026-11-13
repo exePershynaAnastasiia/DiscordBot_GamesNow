@@ -330,53 +330,144 @@ async def create_new_team(interaction: discord.Interaction):
             logger.exception("Could not welcome team creator")
 
 
+
 @bot.tree.command(name="join_team", description="Join an existing project team")
 @app_commands.describe(number="Team number")
 @app_commands.guild_only()
 async def join_team(interaction: discord.Interaction, number: int):
     await interaction.response.defer(ephemeral=True)
+
     guild = interaction.guild
     member = get_interaction_member(interaction)
+
     if guild is None or member is None:
-        await interaction.followup.send("Use this command in the server", ephemeral=True)
+        await interaction.followup.send(
+            "Use this command in the server",
+            ephemeral=True
+        )
         return
 
     await assign_jammer_role(member)
 
     async with bot.team_lock:
+
+        # Teams 1-4 were created manually
+        if 1 <= number <= 4:
+            role = discord.utils.get(
+                guild.roles,
+                name=f"Project{number}"
+            )
+
+            channel = discord.utils.get(
+                guild.text_channels,
+                name=f"team-{number}"
+            )
+
+            if role is None or channel is None:
+                await interaction.followup.send(
+                    f"Role or channel for team {number} was not found",
+                    ephemeral=True
+                )
+                return
+
+            if role in member.roles:
+                await interaction.followup.send(
+                    f"You are already in team {number}",
+                    ephemeral=True
+                )
+                return
+
+            try:
+                await member.add_roles(
+                    role,
+                    reason=f"Joined team {number}"
+                )
+            except discord.HTTPException:
+                logger.exception(
+                    "Failed to add member to team %s",
+                    number
+                )
+                await interaction.followup.send(
+                    "Cannot assign team role",
+                    ephemeral=True
+                )
+                return
+
+            await interaction.followup.send(
+                f"You have joined team {number}!\n"
+                f"Channel: {channel.mention}",
+                ephemeral=True
+            )
+
+            try:
+                await send_welcome(channel, member)
+            except discord.HTTPException:
+                logger.exception(
+                    "Could not welcome new team member"
+                )
+
+            return
+
+        # Teams 5+ are managed through JSON
         team = get_team(guild.id, number)
+
         if team is None:
-            await interaction.followup.send(f"Team {number} does not exist", ephemeral=True)
+            await interaction.followup.send(
+                f"Team {number} does not exist",
+                ephemeral=True
+            )
             return
 
         role = guild.get_role(int(team["role_id"]))
         channel = guild.get_channel(int(team["channel_id"]))
+
         if role is None or not isinstance(channel, discord.TextChannel):
-            await interaction.followup.send("Team role or channel is missing", ephemeral=True)
+            await interaction.followup.send(
+                "Team role or channel is missing",
+                ephemeral=True
+            )
             return
+
         if member.id in team_member_ids(team) and role in member.roles:
-            await interaction.followup.send(f"You are already in team {number}", ephemeral=True)
+            await interaction.followup.send(
+                f"You are already in team {number}",
+                ephemeral=True
+            )
             return
 
         try:
-            await member.add_roles(role, reason=f"Joined team {number}")
+            await member.add_roles(
+                role,
+                reason=f"Joined team {number}"
+            )
         except discord.HTTPException:
-            logger.exception("Failed to add member to team %s", number)
-            await interaction.followup.send("Cannot assign team role", ephemeral=True)
+            logger.exception(
+                "Failed to add member to team %s",
+                number
+            )
+            await interaction.followup.send(
+                "Cannot assign team role",
+                ephemeral=True
+            )
             return
 
         if member.id not in team_member_ids(team):
             team["members"].append(member.id)
+
         await save_and_export(guild)
+
         await interaction.followup.send(
-            f"You have joined team {number}!\nChannel: {channel.mention}",
+            f"You have joined team {number}!\n"
+            f"Channel: {channel.mention}",
             ephemeral=True
         )
+
         try:
             await send_welcome(channel, member)
         except discord.HTTPException:
-            logger.exception("Could not welcome new team member")
-
+            logger.exception(
+                "Could not welcome new team member"
+            )
 
 
 @bot.tree.command(
